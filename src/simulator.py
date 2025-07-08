@@ -150,9 +150,11 @@ def main():
 
     plt.figure(figsize=(10, 6))
     plt.plot(range(1, loop_number + 1), [x * 100 for x in cumulative_winrate])
+    plt.axhline(reversed_rate * 100, color='red', linestyle='--', linewidth=1)
+    plt.text(loop_number * 0.9, reversed_rate * 100 * 1.1, f"{round(reversed_rate * 100, 2)}%", color = 'red', va = "center")
     plt.xlabel("試行回数")
-    plt.ylabel("B党勝率（%）")
-    plt.title("収束曲線：B党勝率の推移")
+    plt.ylabel("B勝率（%）")
+    plt.title("収束曲線：B勝率の推移")
     plt.grid(True)
     plt.savefig("output/convergence_curve.png")
     plt.show()
