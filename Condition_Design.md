@@ -26,6 +26,9 @@
   - output/convergence_curve.png
 - 全試行のパラメータと結果リスト
   - output/result.csv
+- 要約（投票率の平均など）
+  - output/summary.csv
+  - output/summary.png
 
 ## result.csvデータ構造
 
@@ -43,14 +46,18 @@
 - GUI対応は行わない。大変そうなので。
 
 ## フォルダ構成
+```
 no-vote-impact/　<br>
-├── data/                # 入力CSVや定義ファイル <br>
+├── input/                # 入力CSVや定義ファイル <br>
 │   └── initial_condition.csv <br>
 │   └── random_ranges.csv <br>
-├── output/              # 結果CSVやグラフ画像 <br>
-│   └── convergence_curve.png <br>
-│   └── result.csv <br>
+├── output/
+│   ├── result.csv
+│   ├── summary.csv
+│   ├── summary.png
+│   └── convergence_curve.png
 ├── src/                 # ソースコード <br>
 │   ├── simulator.py <br>
 ├── Condition_Design.md  # モデル仕様書（本ファイル） <br>
 └── README.md            # プロジェクト説明 <br>
+```
