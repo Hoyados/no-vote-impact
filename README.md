@@ -7,11 +7,13 @@
 ## 2. フォルダ構成
 ```
 no-vote-impact/
-├── data/
+├── input/
 │   ├── initial_condition.csv
 │   └── random_ranges.csv
 ├── output/
 │   ├── result.csv
+│   ├── summary.csv
+│   ├── summary.png
 │   └── convergence_curve.png
 ├── src/
 │   └── simulator.py
@@ -45,6 +47,8 @@ python simulator.py
   
 ## 6. 出力結果（/outputフォルダ）
 - result.csv: 全試行のリスト
+- summary.csv: 結果の要約
+- summary.png: 計算後の投票率の取りうる幅をグラフ化
 - convergence_curve.png: 試行を重ねるうちのB勝率の推移（確率の収束度合いを図示）
 
 ## 7. 補足

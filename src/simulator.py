@@ -118,33 +118,75 @@ def simulate_once (initialratio_N, initialratio_A, initialratio_B, voteratio, Nt
         "投票率": round((new_A_ratio + new_B_ratio) * 100, 2)
     }
 
-def main():
-    df = fileload("initial_condition")
-    initialratio_N, initialratio_A, initialratio_B = initial_condition(df)
-    df = fileload("random_ranges")
-    voteratio_min, voteratio_max, NtoA_ratio_min, NtoA_ratio_max, AtoB_ratio_min, AtoB_ratio_max, BtoA_ratio_min, BtoA_ratio_max = random_ranges(df)
-    loop_number = loop_setting()
-    result_df = pd.DataFrame(columns=[
-        "voteratio", "NtoA_ratio", "NtoB_ratio",
-        "AtoB_ratio", "BtoA_ratio", "A得票率",
-        "B得票率", "逆転", "投票率"
-    ])
+def sim_loop (loop_number, ranges, initial):
     results = []
     for i in trange(loop_number, desc="シミュレーション中", mininterval = 0.1):
-        voteratio = randomized(voteratio_min, voteratio_max)
-        NtoA_ratio = randomized(NtoA_ratio_min, NtoA_ratio_max)
-        AtoB_ratio = randomized(AtoB_ratio_min, AtoB_ratio_max)
-        BtoA_ratio = randomized(BtoA_ratio_min, BtoA_ratio_max)
-        result = simulate_once(initialratio_N, initialratio_A, initialratio_B, voteratio, NtoA_ratio, AtoB_ratio, BtoA_ratio)
+        voteratio = randomized(*ranges["voteratio"])
+        NtoA_ratio = randomized(*ranges["NtoA_ratio"])
+        AtoB_ratio = randomized(*ranges["AtoB_ratio"])
+        BtoA_ratio = randomized(*ranges["BtoA_ratio"])
+        result = simulate_once(*initial, voteratio, NtoA_ratio, AtoB_ratio, BtoA_ratio)
         results.append(result)
-    result_df = pd.DataFrame(results)
-    result_df.to_csv("output/result.csv", index = False)
-    reversed_rate = result_df["逆転"].mean()
-    print(f"B党の勝率: {round(reversed_rate * 100, 2)}%")
+    return results
 
+def summarize_result (df, initial):
+    summary_df = pd.DataFrame(columns=[
+        "B勝率(%)", "平均投票率(%)", "最高投票率(%)", "最低投票率(%)",
+        "平均A得票率(%)", "最高A得票率(%)", "最低A得票率(%)",
+        "平均B得票率(%)", "最高B得票率(%)", "最低B得票率(%)"
+        ])
+    summary_df.loc[0] = [
+    round(df["逆転"].mean() * 100, 2),
+    round(df["投票率"].mean(), 2),
+    round(df["投票率"].max(), 2),
+    round(df["投票率"].min(), 2),
+    round(df["A得票率"].mean(), 2),
+    round(df["A得票率"].max(), 2),
+    round(df["A得票率"].min(), 2),
+    round(df["B得票率"].mean(), 2),
+    round(df["B得票率"].max(), 2),
+    round(df["B得票率"].min(), 2)
+    ]
+    print(summary_df)
+    summary_df.to_csv("output/summary.csv", index = False)
+
+    fig, axs = plt.subplots(1,2)
+    axs[0].errorbar(x = "投票率(%)", y = summary_df.loc[0]["平均投票率(%)"],
+                    yerr = [[
+                            summary_df.loc[0]["平均投票率(%)"] - summary_df.loc[0]["最低投票率(%)"]
+                            ],
+                            [
+                            summary_df.loc[0]["最高投票率(%)"] - summary_df.loc[0]["平均投票率(%)"]
+                            ]],
+                            fmt = "o", capsize = 10)
+    axs[0].plot(["投票率(%)"], [100 - initial[0] * 100], marker = "o")
+    axs[0].set_ylim(20, 80)
+    axs[1].errorbar(x = ["A得票率(%)", "B得票率(%)"], y = [summary_df.loc[0]["平均A得票率(%)"], summary_df.loc[0]["平均B得票率(%)"]],
+                    yerr = [[
+                            summary_df.loc[0]["平均A得票率(%)"] - summary_df.loc[0]["最低A得票率(%)"],
+                            summary_df.loc[0]["平均B得票率(%)"] - summary_df.loc[0]["最低B得票率(%)"]
+                            ],
+                            [
+                            summary_df.loc[0]["最高A得票率(%)"] - summary_df.loc[0]["平均A得票率(%)"],
+                            summary_df.loc[0]["最高B得票率(%)"] - summary_df.loc[0]["平均B得票率(%)"]
+                            ]],
+                            fmt = "o", capsize = 10)
+    axs[1].plot(["A得票率(%)"], [initial[1] * 100 / (initial[1] + initial[2])], marker = "o")
+    axs[1].plot(["B得票率(%)"], [initial[2] * 100 / (initial[1] + initial[2])], marker = "o")
+    axs[1].set_ylim(20, 80)
+    plt.savefig("output/summary.png")
+    plt.show()
+
+def draw_convergence (df, loop_number, reversed_rate):
+    '''
+    収束関数を描画する関数。
+    引数: 結果dataframe, loop_number, reverse_rate
+    戻り値: なし
+    出力: 描画したグラフ
+    '''
     cumulative_winrate = []
     win_count = 0
-    for i, flag in enumerate(result_df["逆転"], start=1):
+    for i, flag in enumerate(df["逆転"], start=1):
         win_count += flag
         cumulative_winrate.append(win_count / i)
 
@@ -158,4 +200,38 @@ def main():
     plt.grid(True)
     plt.savefig("output/convergence_curve.png")
     plt.show()
+
+def main():
+    df = fileload("initial_condition")
+    initialratio_N, initialratio_A, initialratio_B = initial_condition(df)
+    initial = (initialratio_N, initialratio_A, initialratio_B)
+
+    df = fileload("random_ranges")
+    voteratio_min, voteratio_max, NtoA_ratio_min, NtoA_ratio_max, AtoB_ratio_min, AtoB_ratio_max, BtoA_ratio_min, BtoA_ratio_max = random_ranges(df)
+    ranges = {
+        "voteratio": (voteratio_min, voteratio_max),
+        "NtoA_ratio": (NtoA_ratio_min, NtoA_ratio_max),
+        "AtoB_ratio": (AtoB_ratio_min, AtoB_ratio_max),
+        "BtoA_ratio": (BtoA_ratio_min, BtoA_ratio_max),
+    }
+
+    loop_number = loop_setting()
+
+    result_df = pd.DataFrame(columns=[
+        "voteratio", "NtoA_ratio", "NtoB_ratio",
+        "AtoB_ratio", "BtoA_ratio", "A得票率",
+        "B得票率", "逆転", "投票率"
+    ])
+    
+    results = sim_loop(loop_number, ranges, initial)
+
+    result_df = pd.DataFrame(results)
+    result_df.to_csv("output/result.csv", index = False)
+    reversed_rate = result_df["逆転"].mean()
+    print(f"B党の勝率: {round(reversed_rate * 100, 2)}%")
+
+    summarize_result (result_df, initial)
+
+    draw_convergence (result_df, loop_number, reversed_rate)
+    
 main()
