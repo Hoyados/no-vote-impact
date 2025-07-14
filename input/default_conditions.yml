@@ -1,0 +1,15 @@
+投票率: 50
+A得票率: 70
+B得票率: 30
+voteratio:
+  min: 40
+  max: 60
+NtoA_ratio:
+  min: 15
+  max: 25
+AtoB_ratio:
+  min: 0
+  max: 10
+BtoA_ratio:
+  min: 0
+  max: 5
