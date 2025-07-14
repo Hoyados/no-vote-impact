@@ -1,6 +1,7 @@
 import os
 import numpy as np
 import pandas as pd
+from logging import getLogger, StreamHandler, FileHandler, INFO, ERROR, DEBUG, Formatter
 import argparse
 import yaml
 import matplotlib.pyplot as plt
@@ -9,6 +10,26 @@ import matplotlib.colors as mcolors
 from tqdm import trange
 plt.rcParams["font.family"] = "Hiragino Sans"
 
+logger = getLogger(__name__)
+logger.setLevel(DEBUG)  # ロガー全体の出力レベルを設定
+
+# 出力先1: コンソール
+console_handler = StreamHandler()
+console_handler.setLevel(ERROR)
+console_handler.setFormatter(Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s"))
+
+# 出力先2: ファイル
+file_handler = FileHandler("log.txt", encoding="utf-8")
+file_handler.setLevel(INFO)
+file_handler.setFormatter(Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s"))
+
+# ハンドラ追加
+logger.addHandler(console_handler)
+logger.addHandler(file_handler)
+
+# ルートロガーへの伝播を防ぐ
+logger.propagate = False
+
 parser = argparse.ArgumentParser(description = "簡易的な投票シミュレータです")
 
 parser.add_argument("--config", default = "input/default_conditions.yml", help = "設定ファイル（yml形式、含拡張子、デフォルト: input/default_conditions.yml）")
@@ -16,9 +37,9 @@ parser.add_argument("--loop_number", default = 10000, help = "試行回数（デ
 
 args = parser.parse_args()
 
-# print(f"読み込もうとしているファイルパス: {args.config}")
-# print(f"現在のディレクトリ: {os.getcwd()}")
-# print(f"ファイルの存在チェック: {os.path.exists(args.config)}")
+logger.info(f"読み込もうとしているファイルパス: {args.config}")
+logger.debug(f"現在のディレクトリ: {os.getcwd()}")
+logger.debug(f"ファイルの存在チェック: {os.path.exists(args.config)}")
 
 def fileload():
     '''
@@ -31,7 +52,7 @@ def fileload():
             config = yaml.safe_load(f)
         return config
     except Exception as e:
-        print("読み込み失敗", e)
+        logger.error("読み込み失敗", e)
         exit()
 
 def initial_condition(config):
@@ -44,14 +65,14 @@ def initial_condition(config):
     initialratio_B = config["投票率"] * config["B得票率"] / 10000
     initialratio_N = (100 - config["投票率"]) / 100 + (config["投票率"] / 100 - (initialratio_A + initialratio_B))
     if initialratio_A + initialratio_B + initialratio_N > 1.001 or initialratio_A + initialratio_B + initialratio_N < 0.999:
-        print("A党、B党、他党or無投票の割合の合計が1になりません")
+        logger.error("A党、B党、他党or無投票の割合の合計が1になりません")
         exit()
     elif initialratio_A < 0 or initialratio_B < 0 or initialratio_N < 0:
-        print("A党、B党、他党or無投票の割合が0未満です")
+        logger.error("A党、B党、他党or無投票の割合が0未満です")
         exit()
     else:
-        print("A党得票率（%）, B党得票率（%）, 他政党or無投票率（%）, 合計（%）")
-        print(initialratio_A * 100, initialratio_B * 100, initialratio_N * 100, (initialratio_A + initialratio_B + initialratio_N) * 100)
+        logger.info("A党得票率（%）, B党得票率（%）, 他政党or無投票率（%）, 合計（%）")
+        logger.info(f"{initialratio_A * 100, initialratio_B * 100, initialratio_N * 100, (initialratio_A + initialratio_B + initialratio_N) * 100}")
         return initialratio_N, initialratio_A, initialratio_B
     
 def random_ranges(config):
@@ -70,23 +91,23 @@ def random_ranges(config):
     BtoA_ratio_max = config["BtoA_ratio"]["max"] / 100
 
     if not (0 <= voteratio_min <= voteratio_max <= 1):
-        print("voteratio の最小値と最大値の設定に誤りがあります")
+        logger.error("voteratio の最小値と最大値の設定に誤りがあります")
         exit()
     if not (0 <= NtoA_ratio_min <= NtoA_ratio_max <= 1):
-        print("NtoA_ratio の最小値と最大値の設定に誤りがあります")
+        logger.error("NtoA_ratio の最小値と最大値の設定に誤りがあります")
         exit()
     if not (0 <= AtoB_ratio_min <= AtoB_ratio_max <= 1):
-        print("AtoB_ratio の最小値と最大値の設定に誤りがあります")
+        logger.error("AtoB_ratio の最小値と最大値の設定に誤りがあります")
         exit()
     if not (0 <= BtoA_ratio_min <= BtoA_ratio_max <= 1):
-        print("BtoA_ratio の最小値と最大値の設定に誤りがあります")
+        logger.error("BtoA_ratio の最小値と最大値の設定に誤りがあります")
         exit()
 
-    print("ランダムの取りうる幅（％）")
-    print("voteratio:", voteratio_min * 100, "-", voteratio_max * 100)
-    print("NtoA_ratio:", NtoA_ratio_min * 100, "-", NtoA_ratio_max * 100)
-    print("AtoB_ratio:", AtoB_ratio_min * 100, "-", AtoB_ratio_max * 100)
-    print("BtoA_ratio:", BtoA_ratio_min * 100, "-", BtoA_ratio_max * 100)
+    logger.info("ランダムの取りうる幅（％）")
+    logger.info(f"voteratio:, {voteratio_min * 100}, -, {voteratio_max * 100}")
+    logger.info(f"NtoA_ratio:, {NtoA_ratio_min * 100}, -, {NtoA_ratio_max * 100}")
+    logger.info(f"AtoB_ratio:, {AtoB_ratio_min * 100}, -, {AtoB_ratio_max * 100}")
+    logger.info(f"BtoA_ratio:, {BtoA_ratio_min * 100}, -, {BtoA_ratio_max * 100}")
     
     return voteratio_min, voteratio_max, NtoA_ratio_min, NtoA_ratio_max, AtoB_ratio_min, AtoB_ratio_max, BtoA_ratio_min, BtoA_ratio_max
 
@@ -96,12 +117,12 @@ def loop_setting():
     try:
         loop_number = int(loop_number)
         if loop_number <= 0:
-            print("正の整数で入力して下さい")
+            logger.error("正の整数で入力して下さい")
             exit()
         else:
             return loop_number
     except:    
-        print("半角数字で入力して下さい")
+        logger.error("半角数字で入力して下さい")
         exit()
 
 # 乱数生成
@@ -162,7 +183,7 @@ def summarize_result (df, initial):
     round(df["B得票率"].max(), 2),
     round(df["B得票率"].min(), 2)
     ]
-    print(summary_df)
+    logger.info(summary_df)
     summary_df.to_csv("output/summary.csv", index = False)
 
     fig, axs = plt.subplots(1,2)
@@ -241,7 +262,7 @@ def main():
     result_df = pd.DataFrame(results)
     result_df.to_csv("output/result.csv", index = False)
     reversed_rate = result_df["逆転"].mean()
-    print(f"B党の勝率: {round(reversed_rate * 100, 2)}%")
+    logger.info(f"B党の勝率: {round(reversed_rate * 100, 2)}%")
 
     summarize_result (result_df, initial)
 
