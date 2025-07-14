@@ -6,3 +6,4 @@ summary.csv
 # 仮想環境
 venv/
 .DS_Store
+input/default_conditions.csv
