@@ -1,33 +1,48 @@
+import os
 import numpy as np
 import pandas as pd
+import argparse
+import yaml
 import matplotlib.pyplot as plt
 import matplotlib.font_manager as fm
 import matplotlib.colors as mcolors
 from tqdm import trange
 plt.rcParams["font.family"] = "Hiragino Sans"
 
-def fileload(filename):
+parser = argparse.ArgumentParser(description = "簡易的な投票シミュレータです")
+
+parser.add_argument("--config", default = "input/default_conditions.yml", help = "設定ファイル（yml形式、含拡張子、デフォルト: input/default_conditions.yml）")
+parser.add_argument("--loop_number", default = 10000, help = "試行回数（デフォルト: 10000）")
+
+args = parser.parse_args()
+
+# print(f"読み込もうとしているファイルパス: {args.config}")
+# print(f"現在のディレクトリ: {os.getcwd()}")
+# print(f"ファイルの存在チェック: {os.path.exists(args.config)}")
+
+def fileload():
     '''
     ファイル読み込みの関数。
     引数: filename(ファイル名称、拡張子抜き)
     戻り値: dataframe
     '''   
     try:
-        df = pd.read_csv("input/" + filename + ".csv")
-        return df
-    except:
-        print("ファイルがありません")
+        with open(args.config, "r") as f:
+            config = yaml.safe_load(f)
+        return config
+    except Exception as e:
+        print("読み込み失敗", e)
         exit()
 
-def initial_condition(df):
+def initial_condition(config):
     '''
-    initial_condition.csvの中身を適切な形式に変換する関数
+    条件指定csvから初期条件を抽出する関数
     引数: dataframe
     戻り値: 変換後の各パラメータ
     '''
-    initialratio_A = df.loc[df["種別"] == "投票率", "値（%）"].values[0] * df.loc[df["種別"] == "A得票率", "値（%）"].values[0] / 10000
-    initialratio_B = df.loc[df["種別"] == "投票率", "値（%）"].values[0] * df.loc[df["種別"] == "B得票率", "値（%）"].values[0] / 10000
-    initialratio_N = (100 - df.loc[df["種別"] == "投票率", "値（%）"].values[0]) / 100 + (df.loc[df["種別"] == "投票率", "値（%）"].values[0] / 100 - (initialratio_A + initialratio_B))
+    initialratio_A = config["投票率"] * config["A得票率"] / 10000
+    initialratio_B = config["投票率"] * config["B得票率"] / 10000
+    initialratio_N = (100 - config["投票率"]) / 100 + (config["投票率"] / 100 - (initialratio_A + initialratio_B))
     if initialratio_A + initialratio_B + initialratio_N > 1.001 or initialratio_A + initialratio_B + initialratio_N < 0.999:
         print("A党、B党、他党or無投票の割合の合計が1になりません")
         exit()
@@ -39,20 +54,20 @@ def initial_condition(df):
         print(initialratio_A * 100, initialratio_B * 100, initialratio_N * 100, (initialratio_A + initialratio_B + initialratio_N) * 100)
         return initialratio_N, initialratio_A, initialratio_B
     
-def random_ranges(df):
+def random_ranges(config):
     '''
-    random_ranges.csvの中身を適切な形式に変換する関数
+    条件指定csvからランダム範囲を作成する関数
     引数: dataframe
     戻り値: 変換後の各パラメータ
     '''
-    voteratio_min = df.loc[df["パラメータ名"] == "voteratio", "最小（％）"].values[0] / 100
-    NtoA_ratio_min = df.loc[df["パラメータ名"] == "NtoA_ratio", "最小（％）"].values[0] / 100
-    AtoB_ratio_min = df.loc[df["パラメータ名"] == "AtoB_ratio", "最小（％）"].values[0] / 100
-    BtoA_ratio_min = df.loc[df["パラメータ名"] == "BtoA_ratio", "最小（％）"].values[0] / 100
-    voteratio_max = df.loc[df["パラメータ名"] == "voteratio", "最大（％）"].values[0] / 100
-    NtoA_ratio_max = df.loc[df["パラメータ名"] == "NtoA_ratio", "最大（％）"].values[0] / 100
-    AtoB_ratio_max = df.loc[df["パラメータ名"] == "AtoB_ratio", "最大（％）"].values[0] / 100
-    BtoA_ratio_max = df.loc[df["パラメータ名"] == "BtoA_ratio", "最大（％）"].values[0] / 100
+    voteratio_min = config["voteratio"]["min"] / 100
+    NtoA_ratio_min = config["NtoA_ratio"]["min"] / 100
+    AtoB_ratio_min = config["AtoB_ratio"]["min"] / 100
+    BtoA_ratio_min = config["BtoA_ratio"]["min"] / 100
+    voteratio_max = config["voteratio"]["max"] / 100
+    NtoA_ratio_max = config["NtoA_ratio"]["max"] / 100
+    AtoB_ratio_max = config["AtoB_ratio"]["max"] / 100
+    BtoA_ratio_max = config["BtoA_ratio"]["max"] / 100
 
     if not (0 <= voteratio_min <= voteratio_max <= 1):
         print("voteratio の最小値と最大値の設定に誤りがあります")
@@ -77,7 +92,7 @@ def random_ranges(df):
 
 # ループ回数の設定
 def loop_setting():
-    loop_number = input ("試行回数を入力して下さい（半角数字、正の整数）")
+    loop_number = args.loop_number
     try:
         loop_number = int(loop_number)
         if loop_number <= 0:
@@ -202,12 +217,10 @@ def draw_convergence (df, loop_number, reversed_rate):
     plt.show()
 
 def main():
-    df = fileload("initial_condition")
-    initialratio_N, initialratio_A, initialratio_B = initial_condition(df)
+    config = fileload()
+    initialratio_N, initialratio_A, initialratio_B = initial_condition(config)
     initial = (initialratio_N, initialratio_A, initialratio_B)
-
-    df = fileload("random_ranges")
-    voteratio_min, voteratio_max, NtoA_ratio_min, NtoA_ratio_max, AtoB_ratio_min, AtoB_ratio_max, BtoA_ratio_min, BtoA_ratio_max = random_ranges(df)
+    voteratio_min, voteratio_max, NtoA_ratio_min, NtoA_ratio_max, AtoB_ratio_min, AtoB_ratio_max, BtoA_ratio_min, BtoA_ratio_max = random_ranges(config)
     ranges = {
         "voteratio": (voteratio_min, voteratio_max),
         "NtoA_ratio": (NtoA_ratio_min, NtoA_ratio_max),
