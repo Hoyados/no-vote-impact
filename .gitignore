@@ -1,6 +1,6 @@
 # 出力ファイル
-output/
-*.csv
+result.csv
+summary.csv
 *.png
 
 # 仮想環境
