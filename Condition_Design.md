@@ -11,7 +11,7 @@
 - 前回A, Bに投票したものは、次は無投票には転じない。
 
 ## 処理の流れ
-1. 入力CSVを読み取り、初期得票率とランダムパラメータ範囲を取得
+1. 入力YAMLを読み取り、初期得票率とランダムパラメータ範囲を取得
 2. 試行回数分、乱数を生成して投票率を再計算
 3. 各回の結果（得票率、逆転判定など）を記録
 4. 最終的にB勝率および収束曲線を出力
@@ -44,20 +44,21 @@
 - numpyの `np.random.uniform()` を使用する。
 - ランダム試行のため再現性はなく、また確率が収束する（一定の値に落ち着く）までに十分な回数の施行が必要。
 - GUI対応は行わない。大変そうなので。
+- CLI対応。詳しくはREADMEにて。
 
 ## フォルダ構成
 ```
-no-vote-impact/　<br>
-├── input/                # 入力CSVや定義ファイル <br>
-│   └── initial_condition.csv <br>
-│   └── random_ranges.csv <br>
+no-vote-impact/
+├── input/
+│   └── default_condition.yml
 ├── output/
 │   ├── result.csv
 │   ├── summary.csv
 │   ├── summary.png
 │   └── convergence_curve.png
-├── src/                 # ソースコード <br>
-│   ├── simulator.py <br>
-├── Condition_Design.md  # モデル仕様書（本ファイル） <br>
-└── README.md            # プロジェクト説明 <br>
+├── src/
+│   └── simulator.py
+├── Condition_Design.md
+├── README.md
+└── log.txt
 ```

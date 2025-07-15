@@ -1,10 +1,8 @@
 # 出力ファイル
-result.csv
-summary.csv
 *.png
 
 # 仮想環境
 venv/
 .DS_Store
-input/default_conditions.csv
+*.csv
 log.txt
