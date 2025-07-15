@@ -8,8 +8,7 @@
 ```
 no-vote-impact/
 ├── input/
-│   ├── initial_condition.csv
-│   └── random_ranges.csv
+│   └── default_condition.yml
 ├── output/
 │   ├── result.csv
 │   ├── summary.csv
@@ -18,8 +17,10 @@ no-vote-impact/
 ├── src/
 │   └── simulator.py
 ├── Condition_Design.md
-└── README.md
+├── README.md
+└── log.txt
 ```
+
 
 ## 3. 必要な環境
 - Python 3.10以上
@@ -27,19 +28,23 @@ no-vote-impact/
 - pandas
 - numpy
 - tqdm
+- PyYaml
 
 ## 4. 実行方法
 ```bash
-cd src/
-python simulator.py
+python src/simulator.py --config input/default_conditions.yml --vector --loop_number 1000000
+```
+```bash
+--config: 設定ファイルのパス(default = "input/default_conditions.yml")
+--vector: 指定ありの場合、ベクトル演算にて実施（指定なしの場合、ループ処理）
+--loop_number: 試行回数を指定(default = 1000000)
 ```
 
 ## 5. 設定ファイル
-- initial_condition.csv: 前回投票結果を設定
+- default_condition.yml: シミュレーション条件の設定
   - 投票率(%): 投票率を入力
   - A得票率(%): A(前回勝者)の得票率を入力
   - B得票率(%): Bの得票率を入力
-- random_ranges.csv: ランダムの範囲を設定（最小と最大）
   - voteratio(%): 前回「それ以外」のうち、「A投票者」「B投票者」のどちらかになる割合
   - NtoA_ratio(%): voteratioのうち、「A投票者」になる割合
   - AtoB_ratio(%): 前回「A投票者」のうち、「B投票者」になる割合（離反）

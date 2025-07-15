@@ -34,11 +34,15 @@ logger.propagate = False
 parser = argparse.ArgumentParser(description = "簡易的な投票シミュレータです")
 
 parser.add_argument("--config", default = "input/default_conditions.yml", help = "設定ファイル（yml形式、含拡張子、デフォルト: input/default_conditions.yml）")
-parser.add_argument("-l", "--loop_number", default = 10000, help = "試行回数（デフォルト: 10000）")
+parser.add_argument("--vector", action = "store_true" )
+parser.add_argument("-l", "--loop_number", default = 1000000, help = "試行回数（デフォルト: 1000000）")
 
 args = parser.parse_args()
 
+logger.info("処理開始")
+
 logger.info(f"読み込もうとしているファイルパス: {args.config}")
+logger.info(f"ベクトル演算？: {args.vector}")
 logger.debug(f"現在のディレクトリ: {os.getcwd()}")
 logger.debug(f"ファイルの存在チェック: {os.path.exists(args.config)}")
 
@@ -129,6 +133,10 @@ def loop_setting():
         exit()
 
 # 乱数生成
+def randomized_vector (min, max, loop_number):
+    value = np.random.uniform(min, max, size = loop_number)
+    return value
+
 def randomized (min, max):
     value = np.random.uniform(min, max)
     return value
@@ -168,6 +176,36 @@ def sim_loop (loop_number, ranges, initial):
         results.append(result)
     return results
 
+def simulate_vectorized(loop_number, ranges, initialratio_N, initialratio_A, initialratio_B):
+    voteratio = randomized_vector(*ranges["voteratio"], loop_number)
+    NtoA_ratio = randomized_vector(*ranges["NtoA_ratio"], loop_number)
+    AtoB_ratio = randomized_vector(*ranges["AtoB_ratio"], loop_number)
+    BtoA_ratio = randomized_vector(*ranges["BtoA_ratio"], loop_number)
+
+    new_voter_NtoA = initialratio_N * voteratio * NtoA_ratio
+    new_voter_AtoB = initialratio_A * AtoB_ratio
+    new_voter_NtoB = initialratio_N * voteratio * (1 - NtoA_ratio)
+    new_voter_BtoA = initialratio_B * BtoA_ratio
+
+    new_A_ratio = initialratio_A - new_voter_AtoB + new_voter_NtoA + new_voter_BtoA
+    new_B_ratio = initialratio_B - new_voter_BtoA + new_voter_NtoB + new_voter_AtoB
+
+    winner_flag = (new_B_ratio > new_A_ratio).astype(int)  # True→1, False→0
+
+    result = {
+        "voteratio": np.round(voteratio * 100, 2),
+        "NtoA_ratio": np.round(NtoA_ratio * 100, 2),
+        "NtoB_ratio": np.round((1 - NtoA_ratio) * 100, 2),
+        "AtoB_ratio": np.round(AtoB_ratio * 100, 2),
+        "BtoA_ratio": np.round(BtoA_ratio * 100, 2),
+        "A得票率": np.round(new_A_ratio / (new_A_ratio + new_B_ratio) * 100, 2),
+        "B得票率": np.round(new_B_ratio / (new_A_ratio + new_B_ratio) * 100, 2),
+        "逆転": winner_flag,
+        "投票率": np.round((new_A_ratio + new_B_ratio) * 100, 2)
+    }
+    
+    return result
+
 def summarize_result (df, initial):
     summary_df = pd.DataFrame(columns=[
         "B勝率(%)", "平均投票率(%)", "最高投票率(%)", "最低投票率(%)",
@@ -187,6 +225,7 @@ def summarize_result (df, initial):
     round(df["B得票率"].min(), 2)
     ]
     summary_df.to_csv("output/summary.csv", index = False)
+    logger.info("\n" + str(summary_df.iloc[0]))
 
     fig, axs = plt.subplots(1,2)
     axs[0].errorbar(x = "投票率(%)", y = summary_df.loc[0]["平均投票率(%)"],
@@ -239,6 +278,18 @@ def draw_convergence (df, loop_number, reversed_rate):
     plt.savefig("output/convergence_curve.png")
     # plt.show()
 
+def draw_convergence_for_vector (winner_flag, loop_number, reversed_rate):
+    cumulative_winrate = np.cumsum(winner_flag) / np.arange(1, loop_number + 1)
+    plt.figure(figsize=(10, 6))
+    plt.plot(range(1, loop_number + 1), [x * 100 for x in cumulative_winrate])
+    plt.axhline(reversed_rate * 100, color='red', linestyle='--', linewidth=1)
+    plt.text(loop_number * 0.9, reversed_rate * 100 * 1.1, f"{round(reversed_rate * 100, 2)}%", color = 'red', va = "center")
+    plt.xlabel("試行回数")
+    plt.ylabel("B勝率（%）")
+    plt.title("収束曲線：B勝率の推移")
+    plt.grid(True)
+    plt.savefig("output/convergence_curve.png")
+
 def main():
     config = fileload()
     initialratio_N, initialratio_A, initialratio_B = initial_condition(config)
@@ -259,18 +310,27 @@ def main():
         "B得票率", "逆転", "投票率"
     ])
     
-    results = sim_loop(loop_number, ranges, initial)
-
-    result_df = pd.DataFrame(results)
+    if args.vector:
+        result = simulate_vectorized(loop_number, ranges, initialratio_N, initialratio_A, initialratio_B)
+    else:
+        result = sim_loop(loop_number, ranges, initial)
+  
+    result_df = pd.DataFrame(result)
     result_df.to_csv("output/result.csv", index = False)
     reversed_rate = result_df["逆転"].mean()
     logger.info(f"B党の勝率: {round(reversed_rate * 100, 2)}%")
 
     summarize_result (result_df, initial)
 
-    draw_convergence (result_df, loop_number, reversed_rate)
+    if args.vector:
+        draw_convergence_for_vector (result_df["逆転"], loop_number, reversed_rate)
+    else:
+        draw_convergence (result_df, loop_number, reversed_rate)
+    
     
 main()
 
 end_time = time.perf_counter()
 logger.info(f"処理時間: {round(end_time - start_time, 2)}")
+
+logger.info("処理終了")

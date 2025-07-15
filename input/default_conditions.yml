@@ -9,7 +9,7 @@ NtoA_ratio:
   max: 25
 AtoB_ratio:
   min: 0
-  max: 10
+  max: 5
 BtoA_ratio:
   min: 0
   max: 5
