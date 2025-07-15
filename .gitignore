@@ -7,3 +7,4 @@ summary.csv
 venv/
 .DS_Store
 input/default_conditions.csv
+log.txt

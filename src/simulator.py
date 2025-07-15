@@ -1,4 +1,5 @@
 import os
+import time
 import numpy as np
 import pandas as pd
 from logging import getLogger, StreamHandler, FileHandler, INFO, ERROR, DEBUG, Formatter
@@ -33,13 +34,15 @@ logger.propagate = False
 parser = argparse.ArgumentParser(description = "簡易的な投票シミュレータです")
 
 parser.add_argument("--config", default = "input/default_conditions.yml", help = "設定ファイル（yml形式、含拡張子、デフォルト: input/default_conditions.yml）")
-parser.add_argument("--loop_number", default = 10000, help = "試行回数（デフォルト: 10000）")
+parser.add_argument("-l", "--loop_number", default = 10000, help = "試行回数（デフォルト: 10000）")
 
 args = parser.parse_args()
 
 logger.info(f"読み込もうとしているファイルパス: {args.config}")
 logger.debug(f"現在のディレクトリ: {os.getcwd()}")
 logger.debug(f"ファイルの存在チェック: {os.path.exists(args.config)}")
+
+start_time = time.perf_counter()
 
 def fileload():
     '''
@@ -183,7 +186,6 @@ def summarize_result (df, initial):
     round(df["B得票率"].max(), 2),
     round(df["B得票率"].min(), 2)
     ]
-    logger.info(summary_df)
     summary_df.to_csv("output/summary.csv", index = False)
 
     fig, axs = plt.subplots(1,2)
@@ -211,7 +213,7 @@ def summarize_result (df, initial):
     axs[1].plot(["B得票率(%)"], [initial[2] * 100 / (initial[1] + initial[2])], marker = "o")
     axs[1].set_ylim(20, 80)
     plt.savefig("output/summary.png")
-    plt.show()
+    # plt.show()
 
 def draw_convergence (df, loop_number, reversed_rate):
     '''
@@ -235,7 +237,7 @@ def draw_convergence (df, loop_number, reversed_rate):
     plt.title("収束曲線：B勝率の推移")
     plt.grid(True)
     plt.savefig("output/convergence_curve.png")
-    plt.show()
+    # plt.show()
 
 def main():
     config = fileload()
@@ -269,3 +271,6 @@ def main():
     draw_convergence (result_df, loop_number, reversed_rate)
     
 main()
+
+end_time = time.perf_counter()
+logger.info(f"処理時間: {round(end_time - start_time, 2)}")
