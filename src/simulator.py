@@ -316,7 +316,7 @@ def main():
         result = sim_loop(loop_number, ranges, initial)
   
     result_df = pd.DataFrame(result)
-    result_df.to_csv("output/result.csv", index = False)
+    result_df.to_csv(f"output/{os.path.splitext(os.path.basename(args.config))[0]}result.csv", index = False)
     reversed_rate = result_df["逆転"].mean()
     logger.info(f"B党の勝率: {round(reversed_rate * 100, 2)}%")
 
