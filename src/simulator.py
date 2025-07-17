@@ -34,15 +34,15 @@ logger.propagate = False
 parser = argparse.ArgumentParser(description = "簡易的な投票シミュレータです")
 
 parser.add_argument("--config", default = "input/default_conditions.yml", help = "設定ファイル（yml形式、含拡張子、デフォルト: input/default_conditions.yml）")
-parser.add_argument("--vector", action = "store_true" )
+parser.add_argument("--loop", action = "store_true")
 parser.add_argument("-l", "--loop_number", default = 1000000, help = "試行回数（デフォルト: 1000000）")
 
 args = parser.parse_args()
 
-logger.info("処理開始")
+logger.info(f"処理開始(ファイル名: {os.path.basename(args.config)})")
 
 logger.info(f"読み込もうとしているファイルパス: {args.config}")
-logger.info(f"ベクトル演算？: {args.vector}")
+logger.info(f"ベクトル演算？: {args.loop}")
 logger.debug(f"現在のディレクトリ: {os.getcwd()}")
 logger.debug(f"ファイルの存在チェック: {os.path.exists(args.config)}")
 
@@ -224,7 +224,7 @@ def summarize_result (df, initial):
     round(df["B得票率"].max(), 2),
     round(df["B得票率"].min(), 2)
     ]
-    summary_df.to_csv("output/summary.csv", index = False)
+    summary_df.to_csv(f"output/{os.path.splitext(os.path.basename(args.config))[0]}_summary.csv", index = False)
     logger.info("\n" + str(summary_df.iloc[0]))
 
     fig, axs = plt.subplots(1,2)
@@ -237,7 +237,7 @@ def summarize_result (df, initial):
                             ]],
                             fmt = "o", capsize = 10)
     axs[0].plot(["投票率(%)"], [100 - initial[0] * 100], marker = "o")
-    axs[0].set_ylim(20, 80)
+    axs[0].set_ylim(0, 100)
     axs[1].errorbar(x = ["A得票率(%)", "B得票率(%)"], y = [summary_df.loc[0]["平均A得票率(%)"], summary_df.loc[0]["平均B得票率(%)"]],
                     yerr = [[
                             summary_df.loc[0]["平均A得票率(%)"] - summary_df.loc[0]["最低A得票率(%)"],
@@ -250,8 +250,8 @@ def summarize_result (df, initial):
                             fmt = "o", capsize = 10)
     axs[1].plot(["A得票率(%)"], [initial[1] * 100 / (initial[1] + initial[2])], marker = "o")
     axs[1].plot(["B得票率(%)"], [initial[2] * 100 / (initial[1] + initial[2])], marker = "o")
-    axs[1].set_ylim(20, 80)
-    plt.savefig("output/summary.png")
+    axs[1].set_ylim(0, 100)
+    plt.savefig(f"output/{os.path.splitext(os.path.basename(args.config))[0]}_summary.png")
     # plt.show()
 
 def draw_convergence (df, loop_number, reversed_rate):
@@ -275,7 +275,7 @@ def draw_convergence (df, loop_number, reversed_rate):
     plt.ylabel("B勝率（%）")
     plt.title("収束曲線：B勝率の推移")
     plt.grid(True)
-    plt.savefig("output/convergence_curve.png")
+    plt.savefig(f"output/{os.path.splitext(os.path.basename(args.config))[0]}_convergence_curve.png")
     # plt.show()
 
 def draw_convergence_for_vector (winner_flag, loop_number, reversed_rate):
@@ -288,7 +288,7 @@ def draw_convergence_for_vector (winner_flag, loop_number, reversed_rate):
     plt.ylabel("B勝率（%）")
     plt.title("収束曲線：B勝率の推移")
     plt.grid(True)
-    plt.savefig("output/convergence_curve.png")
+    plt.savefig(f"output/{os.path.splitext(os.path.basename(args.config))[0]}_convergence_curve.png")
 
 def main():
     config = fileload()
@@ -310,7 +310,7 @@ def main():
         "B得票率", "逆転", "投票率"
     ])
     
-    if args.vector:
+    if args.loop == False:
         result = simulate_vectorized(loop_number, ranges, initialratio_N, initialratio_A, initialratio_B)
     else:
         result = sim_loop(loop_number, ranges, initial)
@@ -322,7 +322,7 @@ def main():
 
     summarize_result (result_df, initial)
 
-    if args.vector:
+    if args.loop == False:
         draw_convergence_for_vector (result_df["逆転"], loop_number, reversed_rate)
     else:
         draw_convergence (result_df, loop_number, reversed_rate)
@@ -333,4 +333,4 @@ main()
 end_time = time.perf_counter()
 logger.info(f"処理時間: {round(end_time - start_time, 2)}")
 
-logger.info("処理終了")
+logger.info(f"処理終了(ファイル名: {os.path.basename(args.config)})")
