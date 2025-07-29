@@ -9,6 +9,7 @@ import matplotlib.pyplot as plt
 import matplotlib.font_manager as fm
 import matplotlib.colors as mcolors
 from tqdm import trange
+from pathlib import Path
 plt.rcParams["font.family"] = "Hiragino Sans"
 
 logger = getLogger(__name__)
@@ -45,6 +46,9 @@ logger.info(f"読み込もうとしているファイルパス: {args.config}")
 logger.info(f"ベクトル演算？: {args.loop}")
 logger.debug(f"現在のディレクトリ: {os.getcwd()}")
 logger.debug(f"ファイルの存在チェック: {os.path.exists(args.config)}")
+
+output_dir = Path(f"output/{os.path.splitext(os.path.basename(args.config))[0]}")
+output_dir.mkdir(parents=True, exist_ok=True)
 
 start_time = time.perf_counter()
 
@@ -224,7 +228,7 @@ def summarize_result (df, initial):
     round(df["B得票率"].max(), 2),
     round(df["B得票率"].min(), 2)
     ]
-    summary_df.to_csv(f"output/{os.path.splitext(os.path.basename(args.config))[0]}_summary.csv", index = False)
+    summary_df.to_csv(f"output/{os.path.splitext(os.path.basename(args.config))[0]}/summary.csv", index = False)
     logger.info("\n" + str(summary_df.iloc[0]))
 
     fig, axs = plt.subplots(1,2)
@@ -251,7 +255,7 @@ def summarize_result (df, initial):
     axs[1].plot(["A得票率(%)"], [initial[1] * 100 / (initial[1] + initial[2])], marker = "o")
     axs[1].plot(["B得票率(%)"], [initial[2] * 100 / (initial[1] + initial[2])], marker = "o")
     axs[1].set_ylim(0, 100)
-    plt.savefig(f"output/{os.path.splitext(os.path.basename(args.config))[0]}_summary.png")
+    plt.savefig(f"output/{os.path.splitext(os.path.basename(args.config))[0]}/summary.png")
     # plt.show()
 
 def draw_convergence (df, loop_number, reversed_rate):
@@ -275,7 +279,7 @@ def draw_convergence (df, loop_number, reversed_rate):
     plt.ylabel("B勝率（%）")
     plt.title("収束曲線：B勝率の推移")
     plt.grid(True)
-    plt.savefig(f"output/{os.path.splitext(os.path.basename(args.config))[0]}_convergence_curve.png")
+    plt.savefig(f"output/{os.path.splitext(os.path.basename(args.config))[0]}/convergence_curve.png")
     # plt.show()
 
 def draw_convergence_for_vector (winner_flag, loop_number, reversed_rate):
@@ -288,7 +292,7 @@ def draw_convergence_for_vector (winner_flag, loop_number, reversed_rate):
     plt.ylabel("B勝率（%）")
     plt.title("収束曲線：B勝率の推移")
     plt.grid(True)
-    plt.savefig(f"output/{os.path.splitext(os.path.basename(args.config))[0]}_convergence_curve.png")
+    plt.savefig(f"output/{os.path.splitext(os.path.basename(args.config))[0]}/convergence_curve.png")
 
 def main():
     config = fileload()
@@ -316,7 +320,7 @@ def main():
         result = sim_loop(loop_number, ranges, initial)
   
     result_df = pd.DataFrame(result)
-    result_df.to_csv(f"output/{os.path.splitext(os.path.basename(args.config))[0]}result.csv", index = False)
+    result_df.to_csv(f"output/{os.path.splitext(os.path.basename(args.config))[0]}/result.csv", index = False)
     reversed_rate = result_df["逆転"].mean()
     logger.info(f"B党の勝率: {round(reversed_rate * 100, 2)}%")
 
