@@ -37,13 +37,14 @@ parser = argparse.ArgumentParser(description = "簡易的な投票シミュレ�
 parser.add_argument("--config", default = "input/default_conditions.yml", help = "設定ファイル（yml形式、含拡張子、デフォルト: input/default_conditions.yml）")
 parser.add_argument("--loop", action = "store_true")
 parser.add_argument("-l", "--loop_number", default = 1000000, help = "試行回数（デフォルト: 1000000）")
+parser.add_argument("--seed", type = int, default = 42, help = "乱数のシード値（デフォルト: 42）")
 
 args = parser.parse_args()
 
 logger.info(f"処理開始(ファイル名: {os.path.basename(args.config)})")
 
 logger.info(f"読み込もうとしているファイルパス: {args.config}")
-logger.info(f"ベクトル演算？: {args.loop}")
+logger.info(f"ループ処理？: {args.loop}")
 logger.debug(f"現在のディレクトリ: {os.getcwd()}")
 logger.debug(f"ファイルの存在チェック: {os.path.exists(args.config)}")
 
@@ -137,12 +138,14 @@ def loop_setting():
         exit()
 
 # 乱数生成
-def randomized_vector (min, max, loop_number):
-    value = np.random.uniform(min, max, size = loop_number)
+rng = np.random.default_rng(args.seed) # SEED値を使ったGenerator作成
+
+def randomized_vector (min, max, loop_number, rng):
+    value = rng.uniform(min, max, size = loop_number)
     return value
 
-def randomized (min, max):
-    value = np.random.uniform(min, max)
+def randomized (min, max, rng):
+    value = rng.uniform(min, max)
     return value
 
 # シミュレーション
@@ -169,22 +172,22 @@ def simulate_once (initialratio_N, initialratio_A, initialratio_B, voteratio, Nt
         "投票率": round((new_A_ratio + new_B_ratio) * 100, 2)
     }
 
-def sim_loop (loop_number, ranges, initial):
+def sim_loop (loop_number, ranges, initial, rng):
     results = []
     for i in trange(loop_number, desc="シミュレーション中", mininterval = 0.1):
-        voteratio = randomized(*ranges["voteratio"])
-        NtoA_ratio = randomized(*ranges["NtoA_ratio"])
-        AtoB_ratio = randomized(*ranges["AtoB_ratio"])
-        BtoA_ratio = randomized(*ranges["BtoA_ratio"])
+        voteratio = randomized(*ranges["voteratio"], rng)
+        NtoA_ratio = randomized(*ranges["NtoA_ratio"], rng)
+        AtoB_ratio = randomized(*ranges["AtoB_ratio"], rng)
+        BtoA_ratio = randomized(*ranges["BtoA_ratio"], rng)
         result = simulate_once(*initial, voteratio, NtoA_ratio, AtoB_ratio, BtoA_ratio)
         results.append(result)
     return results
 
-def simulate_vectorized(loop_number, ranges, initialratio_N, initialratio_A, initialratio_B):
-    voteratio = randomized_vector(*ranges["voteratio"], loop_number)
-    NtoA_ratio = randomized_vector(*ranges["NtoA_ratio"], loop_number)
-    AtoB_ratio = randomized_vector(*ranges["AtoB_ratio"], loop_number)
-    BtoA_ratio = randomized_vector(*ranges["BtoA_ratio"], loop_number)
+def simulate_vectorized(loop_number, ranges, initialratio_N, initialratio_A, initialratio_B, rng):
+    voteratio = randomized_vector(*ranges["voteratio"], loop_number, rng)
+    NtoA_ratio = randomized_vector(*ranges["NtoA_ratio"], loop_number, rng)
+    AtoB_ratio = randomized_vector(*ranges["AtoB_ratio"], loop_number, rng)
+    BtoA_ratio = randomized_vector(*ranges["BtoA_ratio"], loop_number, rng)
 
     new_voter_NtoA = initialratio_N * voteratio * NtoA_ratio
     new_voter_AtoB = initialratio_A * AtoB_ratio
@@ -315,9 +318,9 @@ def main():
     ])
     
     if args.loop == False:
-        result = simulate_vectorized(loop_number, ranges, initialratio_N, initialratio_A, initialratio_B)
+        result = simulate_vectorized(loop_number, ranges, initialratio_N, initialratio_A, initialratio_B, rng)
     else:
-        result = sim_loop(loop_number, ranges, initial)
+        result = sim_loop(loop_number, ranges, initial, rng)
   
     result_df = pd.DataFrame(result)
     result_df.to_csv(f"output/{os.path.splitext(os.path.basename(args.config))[0]}/result.csv", index = False)
