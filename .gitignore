@@ -6,3 +6,6 @@ venv/
 .DS_Store
 *.csv
 log.txt
+
+# 個人用メモ
+memo.md
