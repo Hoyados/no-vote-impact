@@ -1,3 +1,15 @@
+## 0. Quick Start
+```bash
+git clone https://github.com/Hoyados/no-vote-impact no-vote-impact && cd no-vote-impact
+python -m pip install -r requirements.txt
+python src/simulator.py --config input/default_conditions.yml --loop_number 50000 --seed 42
+```
+実行後、```output/default_conditions```に以下が生成されます:
+result.csv # 全試行の結果リスト
+summary.csv # 結果の要約
+summary.png # 投票率、得票率の幅
+convergence_curve.png # 勝率の収束曲線
+
 ## 1. プロジェクト概要
 - 無党派層の行動が選挙結果に与える影響を検証するシミュレータです。
 - 簡易化のため、A(前回勝者)とBの二者の戦いのみを対象とします。
@@ -8,21 +20,20 @@
 ```
 no-vote-impact/
 ├── input/
-│   └── default_condition.yml
+│   └── default_conditions.yml
 ├── output/
 │   ├── result.csv
 │   ├── summary.csv
 │   ├── summary.png
 │   └── convergence_curve.png
 ├── src/
-│   ├── analyzze_result.csv # 結果の可視化
-│   ├── batch.csv # バッチ実行
+│   ├── analyze_result.py # 結果の可視化
+│   ├── batch.py # バッチ実行
 │   └── simulator.py
 ├── Condition_Design.md
 ├── README.md
 └── log.txt
 ```
-
 
 ## 3. 必要な環境
 - Python 3.10以上
@@ -35,28 +46,29 @@ no-vote-impact/
 ## 4. 実行方法
 ### 一条件実行
 ```bash
-python src/simulator.py --config input/default_conditions.yml --vector --loop_number 1000000
+python src/simulator.py --config input/default_conditions.yml --loop --loop_number 1000000 --seed 42
 ```
 ```bash
 --config: 設定ファイルのパス(default = "input/default_conditions.yml")
 --loop: 指定ありの場合,ループ処理にて実施（指定なしの場合、ベクトル演算）
 --loop_number: 試行回数を指定(default = 1000000)
+--seed: シード値を指定(default = 42)
 ```
 ### バッチ実行
 ```bash
-python src/batch.py -l 1000000
+python src/batch.py -l 1000000 --seed 42
 ```
 上記コマンドを実行することで、```input/batch```内部の.ymlファイルに対して連続して実行します。<br>
 パラメータを変えた時の変化を見る際に便利です。
 
 ### 分析実行
 ```bash
-python src/analyze.py
+python src/analyze_result.py
 ```
 ```output/*/result.csv```を読み取り、各種パラメータとB勝率のグラフを描画します。
 
 ## 5. 設定ファイル
-- default_condition.yml: シミュレーション条件の設定
+- default_conditions.yml: シミュレーション条件の設定
   - 投票率(%): 投票率を入力
   - A得票率(%): A(前回勝者)の得票率を入力
   - B得票率(%): Bの得票率を入力
@@ -76,7 +88,6 @@ python src/analyze.py
 - 本シミュレーションでは簡易化のためA, Bの二者間の構造に単純化しています。
 - 実際の選挙では複数の候補者が存在し、過半数を取らずに当選する可能性もあります。
 - A, B以外の得票は、「それ以外」に一括りにしています。
-- 乱数を使っており、かつシード値の指定機能はないため、毎回結果が異なる点に留意してください。
 
 ## 8. 免責事項
 - このシミュレーションモデルは選挙結果の予測ではなく、統計的挙動の観察を目的としています。
