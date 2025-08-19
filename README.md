@@ -5,10 +5,10 @@ python -m pip install -r requirements.txt
 python src/simulator.py --config input/default_conditions.yml --loop_number 50000 --seed 42
 ```
 実行後、```output/default_conditions```に以下が生成されます:
-result.csv # 全試行の結果リスト
-summary.csv # 結果の要約
-summary.png # 投票率、得票率の幅
-convergence_curve.png # 勝率の収束曲線
+- result.csv # 全試行の結果リスト
+- summary.csv # 結果の要約
+- summary.png # 投票率、得票率の幅
+- convergence_curve.png # 勝率の収束曲線
 
 ## 1. プロジェクト概要
 - 無党派層の行動が選挙結果に与える影響を検証するシミュレータです。
