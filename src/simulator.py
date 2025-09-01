@@ -1,97 +1,122 @@
 import os
+import sys
 import time
+from pathlib import Path
+from typing import Dict, Tuple
+
+import argparse
 import numpy as np
 import pandas as pd
-from logging import getLogger, StreamHandler, FileHandler, INFO, ERROR, DEBUG, Formatter
-import argparse
 import yaml
 import matplotlib.pyplot as plt
-import matplotlib.font_manager as fm
-import matplotlib.colors as mcolors
-from tqdm import trange
-from pathlib import Path
+
+from logging import (
+    getLogger,
+    StreamHandler,
+    FileHandler,
+    INFO,
+    ERROR,
+    DEBUG,
+    Formatter,
+    Logger,
+)
+
 plt.rcParams["font.family"] = "Hiragino Sans"
 
-logger = getLogger(__name__)
-logger.setLevel(DEBUG)  # ロガー全体の出力レベルを設定
 
-# 出力先1: コンソール
-console_handler = StreamHandler()
-console_handler.setLevel(ERROR)
-console_handler.setFormatter(Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s"))
+def setup_logger() -> Logger:
+    logger = getLogger("simulator")
+    logger.setLevel(DEBUG)
 
-# 出力先2: ファイル
-file_handler = FileHandler("log.txt", encoding="utf-8")
-file_handler.setLevel(INFO)
-file_handler.setFormatter(Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s"))
+    # clear duplicated handlers if re-run in same process
+    logger.handlers.clear()
 
-# ハンドラ追加
-logger.addHandler(console_handler)
-logger.addHandler(file_handler)
+    console_handler = StreamHandler()
+    console_handler.setLevel(ERROR)
+    console_handler.setFormatter(
+        Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+    )
 
-# ルートロガーへの伝播を防ぐ
-logger.propagate = False
+    file_handler = FileHandler("log.txt", encoding="utf-8")
+    file_handler.setLevel(INFO)
+    file_handler.setFormatter(
+        Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+    )
 
-parser = argparse.ArgumentParser(description = "簡易的な投票シミュレータです")
+    logger.addHandler(console_handler)
+    logger.addHandler(file_handler)
+    logger.propagate = False
+    return logger
 
-parser.add_argument("--config", default = "input/default_conditions.yml", help = "設定ファイル（yml形式、含拡張子、デフォルト: input/default_conditions.yml）")
-parser.add_argument("--loop", action = "store_true")
-parser.add_argument("-l", "--loop_number", default = 1000000, help = "試行回数（デフォルト: 1000000）")
-parser.add_argument("--seed", type = int, default = 42, help = "乱数のシード値（デフォルト: 42）")
 
-args = parser.parse_args()
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="簡易的な投票シミュレータです")
+    parser.add_argument(
+        "--config",
+        default="input/default_conditions.yml",
+        help="設定ファイル（yml形式、含拡張子、デフォルト: input/default_conditions.yml）",
+    )
+    parser.add_argument(
+        "-l",
+        "--loop_number",
+        default=1000000,
+        help="試行回数（デフォルト: 1000000）",
+    )
+    parser.add_argument(
+        "--seed", type=int, default=42, help="乱数のシード値（デフォルト: 42)"
+    )
+    return parser.parse_args()
 
-logger.info(f"処理開始(ファイル名: {os.path.basename(args.config)})")
-
-logger.info(f"読み込もうとしているファイルパス: {args.config}")
-logger.info(f"ループ処理？: {args.loop}")
-logger.debug(f"現在のディレクトリ: {os.getcwd()}")
-logger.debug(f"ファイルの存在チェック: {os.path.exists(args.config)}")
-
-output_dir = Path(f"output/{os.path.splitext(os.path.basename(args.config))[0]}")
-output_dir.mkdir(parents=True, exist_ok=True)
-
-start_time = time.perf_counter()
-
-def fileload():
+def fileload(config_path: str, logger: Logger) -> Dict:
     '''
-    ファイル読み込みの関数。
-    引数: filename(ファイル名称、拡張子抜き)
-    戻り値: dataframe
-    '''   
+    設定ファイル（YAML）を読み込む関数。
+    引数: config_path
+    戻り値: dict (設定内容)
+    '''
     try:
-        with open(args.config, "r") as f:
+        with open(config_path, "r", encoding="utf-8") as f:
             config = yaml.safe_load(f)
         return config
-    except Exception as e:
-        logger.error("読み込み失敗", e)
-        exit()
+    except Exception:
+        logger.exception("設定ファイルの読み込みに失敗しました: %s", config_path)
+        sys.exit(1)
 
-def initial_condition(config):
+def initial_condition(config: Dict, logger: Logger) -> Tuple[float, float, float]:
     '''
-    条件指定csvから初期条件を抽出する関数
-    引数: dataframe
-    戻り値: 変換後の各パラメータ
+    YAMLから初期条件を抽出する関数
+    戻り値: (N, A, B) の比率
     '''
     initialratio_A = config["投票率"] * config["A得票率"] / 10000
     initialratio_B = config["投票率"] * config["B得票率"] / 10000
-    initialratio_N = (100 - config["投票率"]) / 100 + (config["投票率"] / 100 - (initialratio_A + initialratio_B))
-    if initialratio_A + initialratio_B + initialratio_N > 1.001 or initialratio_A + initialratio_B + initialratio_N < 0.999:
-        logger.error("A党、B党、他党or無投票の割合の合計が1になりません")
-        exit()
-    elif initialratio_A < 0 or initialratio_B < 0 or initialratio_N < 0:
+    initialratio_N = (
+        (100 - config["投票率"]) / 100
+        + (config["投票率"] / 100 - (initialratio_A + initialratio_B))
+    )
+    total = initialratio_A + initialratio_B + initialratio_N
+    if not (0.999 <= total <= 1.001):
+        logger.error("A党、B党、他党or無投票の割合の合計が1になりません (合計: %.4f)", total)
+        sys.exit(1)
+    if initialratio_A < 0 or initialratio_B < 0 or initialratio_N < 0:
         logger.error("A党、B党、他党or無投票の割合が0未満です")
-        exit()
-    else:
-        logger.info("A党得票率（%）, B党得票率（%）, 他政党or無投票率（%）, 合計（%）")
-        logger.info(f"{initialratio_A * 100, initialratio_B * 100, initialratio_N * 100, (initialratio_A + initialratio_B + initialratio_N) * 100}")
-        return initialratio_N, initialratio_A, initialratio_B
+        sys.exit(1)
+
+    logger.info(
+        "A党得票率（%）, B党得票率（%）, 他政党or無投票率（%）, 合計（%）"
+    )
+    logger.info(
+        "%s",
+        (
+            initialratio_A * 100,
+            initialratio_B * 100,
+            initialratio_N * 100,
+            total * 100,
+        ),
+    )
+    return initialratio_N, initialratio_A, initialratio_B
     
-def random_ranges(config):
+def random_ranges(config: Dict, logger: Logger) -> Tuple[float, ...]:
     '''
-    条件指定csvからランダム範囲を作成する関数
-    引数: dataframe
-    戻り値: 変換後の各パラメータ
+    YAMLからランダム範囲を作成する関数
     '''
     voteratio_min = config["voteratio"]["min"] / 100
     NtoA_ratio_min = config["NtoA_ratio"]["min"] / 100
@@ -104,16 +129,16 @@ def random_ranges(config):
 
     if not (0 <= voteratio_min <= voteratio_max <= 1):
         logger.error("voteratio の最小値と最大値の設定に誤りがあります")
-        exit()
+        sys.exit(1)
     if not (0 <= NtoA_ratio_min <= NtoA_ratio_max <= 1):
         logger.error("NtoA_ratio の最小値と最大値の設定に誤りがあります")
-        exit()
+        sys.exit(1)
     if not (0 <= AtoB_ratio_min <= AtoB_ratio_max <= 1):
         logger.error("AtoB_ratio の最小値と最大値の設定に誤りがあります")
-        exit()
+        sys.exit(1)
     if not (0 <= BtoA_ratio_min <= BtoA_ratio_max <= 1):
         logger.error("BtoA_ratio の最小値と最大値の設定に誤りがあります")
-        exit()
+        sys.exit(1)
 
     logger.info("ランダムの取りうる幅（％）")
     logger.info(f"voteratio:, {voteratio_min * 100}, -, {voteratio_max * 100}")
@@ -121,69 +146,42 @@ def random_ranges(config):
     logger.info(f"AtoB_ratio:, {AtoB_ratio_min * 100}, -, {AtoB_ratio_max * 100}")
     logger.info(f"BtoA_ratio:, {BtoA_ratio_min * 100}, -, {BtoA_ratio_max * 100}")
     
-    return voteratio_min, voteratio_max, NtoA_ratio_min, NtoA_ratio_max, AtoB_ratio_min, AtoB_ratio_max, BtoA_ratio_min, BtoA_ratio_max
+    return (
+        voteratio_min,
+        voteratio_max,
+        NtoA_ratio_min,
+        NtoA_ratio_max,
+        AtoB_ratio_min,
+        AtoB_ratio_max,
+        BtoA_ratio_min,
+        BtoA_ratio_max,
+    )
 
-# ループ回数の設定
-def loop_setting():
-    loop_number = args.loop_number
+def loop_setting(raw_value: str, logger: Logger) -> int:
+    """
+    ループ回数の設定
+    """
     try:
-        loop_number = int(loop_number)
+        loop_number = int(raw_value)
         if loop_number <= 0:
             logger.error("正の整数で入力して下さい")
-            exit()
-        else:
-            return loop_number
-    except:    
+            sys.exit(1)
+        return loop_number
+    except Exception:
         logger.error("半角数字で入力して下さい")
-        exit()
+        sys.exit(1)
 
-# 乱数生成
-rng = np.random.default_rng(args.seed) # SEED値を使ったGenerator作成
+def randomized_vector(min_val: float, max_val: float, loop_number: int, rng: np.random.Generator) -> np.ndarray:
+    return rng.uniform(min_val, max_val, size=loop_number)
 
-def randomized_vector (min, max, loop_number, rng):
-    value = rng.uniform(min, max, size = loop_number)
-    return value
-
-def randomized (min, max, rng):
-    value = rng.uniform(min, max)
-    return value
-
-# シミュレーション
-def simulate_once (initialratio_N, initialratio_A, initialratio_B, voteratio, NtoA_ratio, AtoB_ratio, BtoA_ratio):
-    new_voter_NtoA = initialratio_N * voteratio * NtoA_ratio
-    new_voter_AtoB = initialratio_A * AtoB_ratio
-    new_voter_NtoB = initialratio_N * voteratio * (1 - NtoA_ratio)
-    new_voter_BtoA = initialratio_B * BtoA_ratio
-
-    new_A_ratio = initialratio_A - new_voter_AtoB + new_voter_NtoA + new_voter_BtoA
-    new_B_ratio = initialratio_B - new_voter_BtoA + new_voter_NtoB + new_voter_AtoB
-
-    winner_flag = 1 if new_B_ratio > new_A_ratio else 0
-
-    return {
-        "voteratio": round(voteratio * 100, 2),
-        "NtoA_ratio": round(NtoA_ratio * 100, 2),
-        "NtoB_ratio": round((1 - NtoA_ratio) * 100, 2),
-        "AtoB_ratio": round(AtoB_ratio * 100, 2),
-        "BtoA_ratio": round(BtoA_ratio * 100, 2),
-        "A得票率": round(new_A_ratio / (new_A_ratio + new_B_ratio) * 100, 2),
-        "B得票率": round(new_B_ratio / (new_A_ratio + new_B_ratio) * 100, 2),
-        "逆転": winner_flag,
-        "投票率": round((new_A_ratio + new_B_ratio) * 100, 2)
-    }
-
-def sim_loop (loop_number, ranges, initial, rng):
-    results = []
-    for i in trange(loop_number, desc="シミュレーション中", mininterval = 0.1):
-        voteratio = randomized(*ranges["voteratio"], rng)
-        NtoA_ratio = randomized(*ranges["NtoA_ratio"], rng)
-        AtoB_ratio = randomized(*ranges["AtoB_ratio"], rng)
-        BtoA_ratio = randomized(*ranges["BtoA_ratio"], rng)
-        result = simulate_once(*initial, voteratio, NtoA_ratio, AtoB_ratio, BtoA_ratio)
-        results.append(result)
-    return results
-
-def simulate_vectorized(loop_number, ranges, initialratio_N, initialratio_A, initialratio_B, rng):
+def simulate_vectorized(
+    loop_number: int,
+    ranges: Dict[str, Tuple[float, float]],
+    initialratio_N: float,
+    initialratio_A: float,
+    initialratio_B: float,
+    rng: np.random.Generator,
+):
     voteratio = randomized_vector(*ranges["voteratio"], loop_number, rng)
     NtoA_ratio = randomized_vector(*ranges["NtoA_ratio"], loop_number, rng)
     AtoB_ratio = randomized_vector(*ranges["AtoB_ratio"], loop_number, rng)
@@ -213,7 +211,7 @@ def simulate_vectorized(loop_number, ranges, initialratio_N, initialratio_A, ini
     
     return result
 
-def summarize_result (df, initial):
+def summarize_result(df: pd.DataFrame, initial: Tuple[float, float, float], output_dir: Path, logger: Logger) -> None:
     summary_df = pd.DataFrame(columns=[
         "B勝率(%)", "平均投票率(%)", "最高投票率(%)", "最低投票率(%)",
         "平均A得票率(%)", "最高A得票率(%)", "最低A得票率(%)",
@@ -231,11 +229,11 @@ def summarize_result (df, initial):
     round(df["B得票率"].max(), 2),
     round(df["B得票率"].min(), 2)
     ]
-    summary_df.to_csv(f"output/{os.path.splitext(os.path.basename(args.config))[0]}/summary.csv", index = False)
-    logger.info("\n" + str(summary_df.iloc[0]))
+    summary_df.to_csv(output_dir / "summary.csv", index=False)
+    logger.info("%s", summary_df.iloc[0].to_dict())
 
     fig, axs = plt.subplots(1,2)
-    axs[0].errorbar(x = "投票率(%)", y = summary_df.loc[0]["平均投票率(%)"],
+    axs[0].errorbar(x = ["投票率(%)"], y = [summary_df.loc[0]["平均投票率(%)"]],
                     yerr = [[
                             summary_df.loc[0]["平均投票率(%)"] - summary_df.loc[0]["最低投票率(%)"]
                             ],
@@ -258,34 +256,10 @@ def summarize_result (df, initial):
     axs[1].plot(["A得票率(%)"], [initial[1] * 100 / (initial[1] + initial[2])], marker = "o")
     axs[1].plot(["B得票率(%)"], [initial[2] * 100 / (initial[1] + initial[2])], marker = "o")
     axs[1].set_ylim(0, 100)
-    plt.savefig(f"output/{os.path.splitext(os.path.basename(args.config))[0]}/summary.png")
+    plt.savefig(output_dir / "summary.png")
     # plt.show()
 
-def draw_convergence (df, loop_number, reversed_rate):
-    '''
-    収束関数を描画する関数。
-    引数: 結果dataframe, loop_number, reverse_rate
-    戻り値: なし
-    出力: 描画したグラフ
-    '''
-    cumulative_winrate = []
-    win_count = 0
-    for i, flag in enumerate(df["逆転"], start=1):
-        win_count += flag
-        cumulative_winrate.append(win_count / i)
-
-    plt.figure(figsize=(10, 6))
-    plt.plot(range(1, loop_number + 1), [x * 100 for x in cumulative_winrate])
-    plt.axhline(reversed_rate * 100, color='red', linestyle='--', linewidth=1)
-    plt.text(loop_number * 0.9, reversed_rate * 100 * 1.1, f"{round(reversed_rate * 100, 2)}%", color = 'red', va = "center")
-    plt.xlabel("試行回数")
-    plt.ylabel("B勝率（%）")
-    plt.title("収束曲線：B勝率の推移")
-    plt.grid(True)
-    plt.savefig(f"output/{os.path.splitext(os.path.basename(args.config))[0]}/convergence_curve.png")
-    # plt.show()
-
-def draw_convergence_for_vector (winner_flag, loop_number, reversed_rate):
+def draw_convergence_for_vector(winner_flag: pd.Series, loop_number: int, reversed_rate: float, output_dir: Path) -> None:
     cumulative_winrate = np.cumsum(winner_flag) / np.arange(1, loop_number + 1)
     plt.figure(figsize=(10, 6))
     plt.plot(range(1, loop_number + 1), [x * 100 for x in cumulative_winrate])
@@ -295,13 +269,24 @@ def draw_convergence_for_vector (winner_flag, loop_number, reversed_rate):
     plt.ylabel("B勝率（%）")
     plt.title("収束曲線：B勝率の推移")
     plt.grid(True)
-    plt.savefig(f"output/{os.path.splitext(os.path.basename(args.config))[0]}/convergence_curve.png")
+    plt.savefig(output_dir / "convergence_curve.png")
 
-def main():
-    config = fileload()
-    initialratio_N, initialratio_A, initialratio_B = initial_condition(config)
+
+def main() -> None:
+    args = parse_args()
+    logger = setup_logger()
+    start_time = time.perf_counter()
+
+    logger.info("処理開始(ファイル名: %s)", os.path.basename(args.config))
+    logger.info("読み込もうとしているファイルパス: %s", args.config)
+
+    output_dir = Path(f"output/{os.path.splitext(os.path.basename(args.config))[0]}")
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    config = fileload(args.config, logger)
+    initialratio_N, initialratio_A, initialratio_B = initial_condition(config, logger)
     initial = (initialratio_N, initialratio_A, initialratio_B)
-    voteratio_min, voteratio_max, NtoA_ratio_min, NtoA_ratio_max, AtoB_ratio_min, AtoB_ratio_max, BtoA_ratio_min, BtoA_ratio_max = random_ranges(config)
+    voteratio_min, voteratio_max, NtoA_ratio_min, NtoA_ratio_max, AtoB_ratio_min, AtoB_ratio_max, BtoA_ratio_min, BtoA_ratio_max = random_ranges(config, logger)
     ranges = {
         "voteratio": (voteratio_min, voteratio_max),
         "NtoA_ratio": (NtoA_ratio_min, NtoA_ratio_max),
@@ -309,35 +294,22 @@ def main():
         "BtoA_ratio": (BtoA_ratio_min, BtoA_ratio_max),
     }
 
-    loop_number = loop_setting()
+    loop_number = loop_setting(args.loop_number, logger)
 
-    result_df = pd.DataFrame(columns=[
-        "voteratio", "NtoA_ratio", "NtoB_ratio",
-        "AtoB_ratio", "BtoA_ratio", "A得票率",
-        "B得票率", "逆転", "投票率"
-    ])
-    
-    if args.loop == False:
-        result = simulate_vectorized(loop_number, ranges, initialratio_N, initialratio_A, initialratio_B, rng)
-    else:
-        result = sim_loop(loop_number, ranges, initial, rng)
-  
+    rng = np.random.default_rng(args.seed)
+    result = simulate_vectorized(loop_number, ranges, initialratio_N, initialratio_A, initialratio_B, rng)
     result_df = pd.DataFrame(result)
-    result_df.to_csv(f"output/{os.path.splitext(os.path.basename(args.config))[0]}/result.csv", index = False)
+    result_df.to_csv(output_dir / "result.csv", index=False)
     reversed_rate = result_df["逆転"].mean()
-    logger.info(f"B党の勝率: {round(reversed_rate * 100, 2)}%")
+    logger.info("B党の勝率: %.2f%%", round(reversed_rate * 100, 2))
 
-    summarize_result (result_df, initial)
+    summarize_result(result_df, initial, output_dir, logger)
+    draw_convergence_for_vector(result_df["逆転"], loop_number, reversed_rate, output_dir)
 
-    if args.loop == False:
-        draw_convergence_for_vector (result_df["逆転"], loop_number, reversed_rate)
-    else:
-        draw_convergence (result_df, loop_number, reversed_rate)
-    
-    
-main()
+    end_time = time.perf_counter()
+    logger.info("処理時間: %.2f", round(end_time - start_time, 2))
+    logger.info("処理終了(ファイル名: %s)", os.path.basename(args.config))
 
-end_time = time.perf_counter()
-logger.info(f"処理時間: {round(end_time - start_time, 2)}")
 
-logger.info(f"処理終了(ファイル名: {os.path.basename(args.config)})")
+if __name__ == "__main__":
+    main()
