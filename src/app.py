@@ -1,33 +1,23 @@
 import io
 import os
 from pathlib import Path
-from typing import Dict, Tuple, Optional, List
+from typing import Dict, Tuple, Optional
 
-import yaml
 import numpy as np
 import pandas as pd
 import streamlit as st
 import plotly.graph_objects as go
 
-# 内部ロジックは既存の simulator と整合を取る
+# 内部ロジックは YAML 依存のない core を利用
 try:
-    # ケース1: streamlit run src/app.py（sys.path に src が入る）
-    from simulator import simulate_vectorized
+    from core import simulate_vectorized
 except Exception:
-    # ケース2: ルートが sys.path（src がパッケージ）
-    from src.simulator import simulate_vectorized
+    from src.core import simulate_vectorized
 
 
 # ------------------------------
 # ユーティリティ（入力検証など）
 # ------------------------------
-def list_yaml_candidates() -> List[str]:
-    paths = []
-    paths += [str(p) for p in Path("input").glob("*.yml")]
-    paths += [str(p) for p in Path("input/batch").glob("*.yml")]
-    return sorted(paths)
-
-
 def validate_config(config: Dict) -> Optional[str]:
     required_top = [
         "投票率",
@@ -252,82 +242,50 @@ st.set_page_config(page_title="投票シミュレータ", layout="wide")
 st.title("簡易投票シミュレータ（Streamlit版）")
 
 with st.sidebar:
-    st.header("設定入力")
-    input_mode = st.radio(
-        "設定の取得方法",
-        ["既存YAMLを選択", "YAMLをアップロード", "値を手入力"],
-        index=0,
-    )
-
+    st.header("設定入力（GUIのみ）")
     loop_number = st.number_input("試行回数", min_value=1, max_value=10_000_000, value=100_000, step=1)
     seed = st.number_input("乱数シード", min_value=0, max_value=1_000_000_000, value=42, step=1)
     save_results = st.checkbox("結果（CSV/概要）を保存する", value=True)
 
     run_button = st.button("シミュレーション実行", type="primary")
 
+def get_config_from_ui() -> Tuple[Optional[Dict], Optional[str]]:
+    # YAMLは不使用。GUI入力のみ。
+    st.subheader("基本パラメータ（%）")
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        投票率 = st.number_input("投票率", min_value=0.0, max_value=100.0, value=50.0, step=1.0)
+    with col2:
+        A得票率 = st.number_input("A得票率", min_value=0.0, max_value=100.0, value=70.0, step=1.0)
+    with col3:
+        B得票率 = st.number_input("B得票率", min_value=0.0, max_value=100.0, value=30.0, step=1.0)
 
-def get_config_from_ui(mode: str) -> Tuple[Optional[Dict], Optional[str]]:
-    if mode == "既存YAMLを選択":
-        candidates = list_yaml_candidates()
-        if not candidates:
-            st.info("input/ または input/batch/ にYAMLがありません。アップロードや手入力をご利用ください。")
-        default_idx = 0
-        if "input/default_conditions.yml" in candidates:
-            default_idx = candidates.index("input/default_conditions.yml")
-        selected = st.selectbox("設定ファイルを選択", options=candidates, index=default_idx if candidates else 0)
-        path = selected if candidates else None
-        if path and Path(path).exists():
-            with open(path, "r", encoding="utf-8") as f:
-                config = yaml.safe_load(f)
-            return config, Path(path).stem
-        return None, None
+    st.subheader("ランダム範囲（%）")
+    c1, c2 = st.columns(2)
+    with c1:
+        voteratio_min = st.number_input("voteratio min", min_value=0.0, max_value=100.0, value=40.0, step=0.5)
+        NtoA_ratio_min = st.number_input("NtoA_ratio min", min_value=0.0, max_value=100.0, value=15.0, step=0.5)
+        AtoB_ratio_min = st.number_input("AtoB_ratio min", min_value=0.0, max_value=100.0, value=0.0, step=0.5)
+        BtoA_ratio_min = st.number_input("BtoA_ratio min", min_value=0.0, max_value=100.0, value=0.0, step=0.5)
+    with c2:
+        voteratio_max = st.number_input("voteratio max", min_value=0.0, max_value=100.0, value=60.0, step=0.5)
+        NtoA_ratio_max = st.number_input("NtoA_ratio max", min_value=0.0, max_value=100.0, value=25.0, step=0.5)
+        AtoB_ratio_max = st.number_input("AtoB_ratio max", min_value=0.0, max_value=100.0, value=5.0, step=0.5)
+        BtoA_ratio_max = st.number_input("BtoA_ratio max", min_value=0.0, max_value=100.0, value=5.0, step=0.5)
 
-    elif mode == "YAMLをアップロード":
-        up = st.file_uploader("YAMLファイルを選択", type=["yml", "yaml"])
-        if up is not None:
-            try:
-                config = yaml.safe_load(up.getvalue().decode("utf-8"))
-                return config, Path(up.name).stem
-            except Exception as e:
-                st.error(f"YAMLの解析に失敗しました: {e}")
-        return None, None
-
-    else:  # 値を手入力
-        st.subheader("基本パラメータ（%）")
-        col1, col2, col3 = st.columns(3)
-        with col1:
-            投票率 = st.number_input("投票率", min_value=0.0, max_value=100.0, value=50.0, step=1.0)
-        with col2:
-            A得票率 = st.number_input("A得票率", min_value=0.0, max_value=100.0, value=70.0, step=1.0)
-        with col3:
-            B得票率 = st.number_input("B得票率", min_value=0.0, max_value=100.0, value=30.0, step=1.0)
-
-        st.subheader("ランダム範囲（%）")
-        c1, c2 = st.columns(2)
-        with c1:
-            voteratio_min = st.number_input("voteratio min", min_value=0.0, max_value=100.0, value=40.0, step=0.5)
-            NtoA_ratio_min = st.number_input("NtoA_ratio min", min_value=0.0, max_value=100.0, value=15.0, step=0.5)
-            AtoB_ratio_min = st.number_input("AtoB_ratio min", min_value=0.0, max_value=100.0, value=0.0, step=0.5)
-            BtoA_ratio_min = st.number_input("BtoA_ratio min", min_value=0.0, max_value=100.0, value=0.0, step=0.5)
-        with c2:
-            voteratio_max = st.number_input("voteratio max", min_value=0.0, max_value=100.0, value=60.0, step=0.5)
-            NtoA_ratio_max = st.number_input("NtoA_ratio max", min_value=0.0, max_value=100.0, value=25.0, step=0.5)
-            AtoB_ratio_max = st.number_input("AtoB_ratio max", min_value=0.0, max_value=100.0, value=5.0, step=0.5)
-            BtoA_ratio_max = st.number_input("BtoA_ratio max", min_value=0.0, max_value=100.0, value=5.0, step=0.5)
-
-        config = {
-            "投票率": 投票率,
-            "A得票率": A得票率,
-            "B得票率": B得票率,
-            "voteratio": {"min": voteratio_min, "max": voteratio_max},
-            "NtoA_ratio": {"min": NtoA_ratio_min, "max": NtoA_ratio_max},
-            "AtoB_ratio": {"min": AtoB_ratio_min, "max": AtoB_ratio_max},
-            "BtoA_ratio": {"min": BtoA_ratio_min, "max": BtoA_ratio_max},
-        }
-        return config, "manual"
+    config = {
+        "投票率": 投票率,
+        "A得票率": A得票率,
+        "B得票率": B得票率,
+        "voteratio": {"min": voteratio_min, "max": voteratio_max},
+        "NtoA_ratio": {"min": NtoA_ratio_min, "max": NtoA_ratio_max},
+        "AtoB_ratio": {"min": AtoB_ratio_min, "max": AtoB_ratio_max},
+        "BtoA_ratio": {"min": BtoA_ratio_min, "max": BtoA_ratio_max},
+    }
+    return config, "manual"
 
 
-config, label = get_config_from_ui(input_mode)
+config, label = get_config_from_ui()
 
 if run_button:
     if config is None:
